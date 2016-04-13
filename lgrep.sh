@@ -71,7 +71,7 @@ function initialize() {
         to_filter_tree_files+=("$line")
     done < $TMP_DIR/lgrep-to_filter_tree
 
-read -d '' file_content <<"EOF"
+    read -d '' file_content <<"EOF"
 #All lines have to start with a sign "+", "-" or "#"
 #    "#" sign tells lgrep to ignore the line
 #    "+" sign means that the keyword afterward should be used to filter the log
@@ -90,6 +90,37 @@ EOF
     for file in "${to_filter_tree_files[@]}"; do
         echo "$file_content" > $AVAILABLE_CONF_DIR/${file:2}.conf
     done
+}
+
+ #TODO: copy file from AVAILABLE_CONF_DIR to CONFIG_DIR and mkdirs if none present
+function enable() {
+    ls $AVAILABLE_CONF_DIR/$1 2>/dev/null 1>/dev/null || {
+        echo "Cannot find $1 in $AVAILABLE_CONF_DIR"
+        exit 8
+    }
+    SAVEIFS=$IFS
+    IFS='/'
+    dirs=()
+    for dir in $1; do
+        dirs+=("$dir")
+    done
+    IFS=$SAVEIFS
+
+    cd $CONF_DIR || {
+        echo "Cannot change to $CONF_DIR directory." >&2
+        exit 5;
+    }
+
+    for dir in "${dirs[@]:0:(${#dirs[@]}-1)}"; do
+        mkdir $dir && cd $dir || {
+            echo "Cannot create or change to $dir directory." >&2
+            exit 5;
+        }
+    done
+    cp $AVAILABLE_CONF_DIR/$1 ${dirs[(${#dirs[@]}-1)]} || {
+        echo "Problems with cp"
+        exit 7
+    }
 }
 
 #----------------------------------------------------------------- Let's go
@@ -116,8 +147,15 @@ else
                 echo "Do you want to initialize lgrep config files?"
                 select yn in "Yes" "No"; do
                     case $yn in
-                        Yes ) initialize ; break;;
-                        No ) exit 0;;
+                        Yes )
+                            if (initialize); then
+                                echo initializing passed
+                            else
+                                echo initializing failed
+                            fi
+                            break;;
+                        No )
+                            exit 0;;
                     esac
                 done
             ;;
@@ -125,7 +163,11 @@ else
                 echo "Option $optname with relative filepath: $OPTARG"
             ;;
             "e")
-                echo "Lgrep config $OPTARG enabled."                    #TODO: copy file from AVAILABLE_CONF_DIR to CONFIG_DIR and mkdirs if none present
+                if (enable $OPTARG); then
+                    echo "Lgrep config $OPTARG enabled."
+                else
+                    echo Enabling failed
+                fi
             ;;
             "d")
                 echo "Lgrep config $OPTARG disabled."                   #TODO: remove config file from CONFIG_DIR and rmdir if last one
