@@ -93,14 +93,15 @@ EOF
 }
 
 function enable() {
-    ls $AVAILABLE_CONF_DIR/$1 2>/dev/null 1>/dev/null || {
-        echo "Cannot find $1 in $AVAILABLE_CONF_DIR"
+    file="$1.conf"
+    ls $AVAILABLE_CONF_DIR/$file 2>/dev/null 1>/dev/null || {
+        echo "Cannot find $file in $AVAILABLE_CONF_DIR"
         exit 8
     }
     SAVEIFS=$IFS
     IFS='/'
     dirs=()
-    for dir in $1; do
+    for dir in $file; do
         dirs+=("$dir")
     done
     IFS=$SAVEIFS
@@ -121,21 +122,22 @@ function enable() {
         }
     done
     #TODO: If file exists ask user to rewrite
-    cp $AVAILABLE_CONF_DIR/$1 ${dirs[@]: -1} 2>/dev/null || {
+    cp $AVAILABLE_CONF_DIR/$file ${dirs[@]: -1} 2>/dev/null || {
         echo "Problems with cp"
         exit 7
     }
 }
 
 function disable() {
-    ls $CONF_DIR/$1 2>/dev/null 1>/dev/null || {
-        echo "Cannot find $1 in $CONF_DIR"
+    file="$1.conf"
+    ls $CONF_DIR/$file 2>/dev/null 1>/dev/null || {
+        echo "Cannot find $file in $CONF_DIR"
         exit 8
     }
     SAVEIFS=$IFS
     IFS='/'
     dirs=()
-    for dir in $1; do
+    for dir in $file; do
         dirs+=("$dir")
     done
     IFS=$SAVEIFS
@@ -164,15 +166,67 @@ function disable() {
         }
     done
 }
-#----------------------------------------------------------------- Let's go
+
+#----------------------------------------------------------------- Lgrep core
 
 if [ "$#" == "0" ]; then
+    #create directories in FILTERED_DIR comparing to CONF_DIR
+    cd $CONF_DIR || {
+        echo "Cannot change to $CONF_DIR directory." >&2
+        exit 5;
+    }
 
-    echo "Let's lgrep all of you."                                      #TODO: core of lgrep - lgrep them all
-    echo $CONF_DIR
+    find . -type d > $TMP_DIR/lgrep-to_filter_tree
+
+    to_filter_tree_dirs=()
+    while read line; do
+        to_filter_tree_dirs+=("$line")
+    done < $TMP_DIR/lgrep-to_filter_tree
+
+    for dir in "${to_filter_tree_dirs[@]:1}"; do
+        mkdir $FILTERED_DIR/${dir:2} 2>/dev/null
+    done
+
+    #------------------------------ Let's go
+    cd $CONF_DIR || {
+        echo "Cannot change to $CONF_DIR directory." >&2
+        exit 5;
+    }
+    for file in `find . -type f -name "*.conf"`; do
+        added_keywords=()
+        removed_keywords=()
+        while read line; do
+            first=`echo ${line:0:1}`
+            if [ "$first" = "+" ]; then
+                added_keywords+=("${line:1}")
+            elif [ "$first" = "-" ]; then
+                removed_keywords+=("${line:1}")
+            fi
+        done < $file
+
+        remove_request=""
+        for removed_keyword in "${removed_keywords[@]}"; do
+            remove_request="$remove_request|$removed_keyword"
+        done
+
+        add_request=""
+        for added_keyword in "${added_keywords[@]}"; do
+            add_request="$add_request|$added_keyword"
+        done
+
+        if test -z "$remove_request" -a -z "$add_request"; then
+            echo "None keywords specified to filter file ${file:1:-5}"
+        elif test -z "$remove_request"; then
+            egrep "${add_request:1}" $TO_FILTER_DIR${file:1:-5} > $FILTERED_DIR${file:1:-5}
+        elif test -z "$add_request"; then
+            egrep -v "${removed_keywords:1}" $TO_FILTER_DIR${file:1:-5} > $FILTERED_DIR${file:1:-5}
+        else
+            egrep -v "${removed_keywords:1}" $TO_FILTER_DIR${file:1:-5} | egrep "${add_request:1}" > $FILTERED_DIR${file:1:-5}
+        fi
+    done
     exit
 else
-    while getopts ":if:e:d:h" optname
+    while getopts ":ie:d:h" optname   # ------------------------------------------ Invoke parameters handling
     do
         case "$optname" in
             "h")
@@ -199,9 +253,6 @@ else
                     esac
                 done
             ;;
-            "f")
-                echo "Option $optname with relative filepath: $OPTARG"
-            ;;
             "e")
                 if (enable $OPTARG); then
                     echo "Lgrep config $OPTARG enabled."
@@ -218,7 +269,7 @@ else
             ;;
             "?")
                 echo "Usage:"
-                echo "$0 [-i | -f <filepath> | -e <filepath> | -d <filepath>]"
+                echo "$0 [-i | -e <filepath> | -d <filepath>]"
             ;;
             ":")
                 echo "Option $OPTARG requires parameter. Check $0 -h for details."
@@ -228,13 +279,7 @@ else
                 echo "Unknown error while processing options"
             ;;
         esac
-        #echo "OPTIND is now $OPTIND" #debug
     done
 fi
-
-cd $LOG_DIR || {
-    echo "Cannot change to necessary directory." >&2
-    exit $E_XCD;
-}
 
 exit 0
