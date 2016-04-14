@@ -92,7 +92,6 @@ EOF
     done
 }
 
- #TODO: copy file from AVAILABLE_CONF_DIR to CONFIG_DIR and mkdirs if none present
 function enable() {
     ls $AVAILABLE_CONF_DIR/$1 2>/dev/null 1>/dev/null || {
         echo "Cannot find $1 in $AVAILABLE_CONF_DIR"
@@ -112,17 +111,59 @@ function enable() {
     }
 
     for dir in "${dirs[@]:0:(${#dirs[@]}-1)}"; do
-        mkdir $dir && cd $dir || {
-            echo "Cannot create or change to $dir directory." >&2
+        test -d $dir || mkdir $dir || {
+            echo "Cannot create $dir directory." >&2
+            exit 5;
+        }
+        cd $dir || {
+            echo "Cannot change to $dir directory." >&2
             exit 5;
         }
     done
-    cp $AVAILABLE_CONF_DIR/$1 ${dirs[(${#dirs[@]}-1)]} || {
+    #TODO: If file exists ask user to rewrite
+    cp $AVAILABLE_CONF_DIR/$1 ${dirs[@]: -1} 2>/dev/null || {
         echo "Problems with cp"
         exit 7
     }
 }
 
+function disable() {
+    ls $CONF_DIR/$1 2>/dev/null 1>/dev/null || {
+        echo "Cannot find $1 in $CONF_DIR"
+        exit 8
+    }
+    SAVEIFS=$IFS
+    IFS='/'
+    dirs=()
+    for dir in $1; do
+        dirs+=("$dir")
+    done
+    IFS=$SAVEIFS
+
+    cd $CONF_DIR || {
+        echo "Cannot change to $CONF_DIR directory." >&2
+        exit 5;
+    }
+    counter=0
+    for dir in "${dirs[@]:0:(${#dirs[@]}-1)}"; do
+        cd $dir || {
+            echo "Cannot change to $dir directory." >&2
+            exit 5;
+        }
+        counter=$((counter+1))
+    done
+    rm ${dirs[(${#dirs[@]}-1)]} 2>/dev/null || {
+        echo "Problems with rm"
+        exit 9
+    }
+    for i in $(seq 2 $((counter+1))); do
+        # echo $((${#dirs[@]}-$i))
+        [ "$(ls -A .)" ] && break || cd .. && rm -r ${dirs[$((${#dirs[@]}-$i))]} || {
+            echo "Problems with rm dir"
+            exit 10
+        }
+    done
+}
 #----------------------------------------------------------------- Let's go
 
 if [ "$#" == "0" ]; then
@@ -143,7 +184,6 @@ else
                 echo "   -d <file path>  - disable config in filepath"
             ;;
             "i")
-                #TODO: function: copy directory tree from TO_FILTER_DIR to AVAILABLE_CONF_DIR and so on
                 echo "Do you want to initialize lgrep config files?"
                 select yn in "Yes" "No"; do
                     case $yn in
@@ -170,7 +210,11 @@ else
                 fi
             ;;
             "d")
-                echo "Lgrep config $OPTARG disabled."                   #TODO: remove config file from CONFIG_DIR and rmdir if last one
+                if (disable $OPTARG); then
+                    echo "Lgrep config $OPTARG disabled."
+                else
+                    echo Disabling failed
+                fi
             ;;
             "?")
                 echo "Usage:"
@@ -188,27 +232,9 @@ else
     done
 fi
 
-
-
-# function p_show() {
-#     local p="$@" &&
-#         for p; do [[ ${!p} ]] &&
-#             echo -e ${!p//:/\\n};
-#     done
-# }
-
-# while read -r
-#     do [[ $REPLY = `echo $LOG_DIR` ]] && echo "$REPLY"
-# done < file
-
-
 cd $LOG_DIR || {
     echo "Cannot change to necessary directory." >&2
     exit $E_XCD;
 }
-
-# (cd /var/log && find .) > /tmp/drzewo_varloga
-# (cd $CONFIG_DIR && find .) > /tmp/drzewo_configdira
-# for filename in drzewo_configdira { grep /tmp/drzewo_varloga } # tu będą te same
 
 exit 0
