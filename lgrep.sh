@@ -1,4 +1,4 @@
-#!/usr/bin/bash
+#!/usr/bin/env bash
 #change this value if you want to change localization of lgrep main config file
 CONFIG_FILE=lgrep_config.cfg
 
