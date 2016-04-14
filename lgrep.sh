@@ -98,8 +98,14 @@ function enable() {
         echo "Cannot find $file in $AVAILABLE_CONF_DIR"
         exit 8
     }
+    ls $CONF_DIR/$1 2>/dev/null && {
+        echo "$1 is enabled"
+        exit 11
+    }
+
     SAVEIFS=$IFS
     IFS='/'
+
     dirs=()
     for dir in $file; do
         dirs+=("$dir")
@@ -121,7 +127,6 @@ function enable() {
             exit 5;
         }
     done
-    #TODO: If file exists ask user to rewrite
     cp $AVAILABLE_CONF_DIR/$file ${dirs[@]: -1} 2>/dev/null || {
         echo "Problems with cp"
         exit 7
@@ -192,6 +197,9 @@ if [ "$#" == "0" ]; then
         echo "Cannot change to $CONF_DIR directory." >&2
         exit 5;
     }
+    if test -z "`find . -type f -name "*.conf"`"; then
+        echo "No configs found in $CONF_DIR"
+    fi
     for file in `find . -type f -name "*.conf"`; do
         added_keywords=()
         removed_keywords=()
@@ -216,6 +224,7 @@ if [ "$#" == "0" ]; then
 
         if test -z "$remove_request" -a -z "$add_request"; then
             echo "None keywords specified to filter file ${file:1:-5}"
+            continue
         elif test -z "$remove_request"; then
             egrep "${add_request:1}" $TO_FILTER_DIR${file:1:-5} > $FILTERED_DIR${file:1:-5}
         elif test -z "$add_request"; then
@@ -223,7 +232,10 @@ if [ "$#" == "0" ]; then
         else
             egrep -v "${removed_keywords:1}" $TO_FILTER_DIR${file:1:-5} | egrep "${add_request:1}" > $FILTERED_DIR${file:1:-5}
         fi
+        echo ${file:2:-5} lgrepped
     done
+    echo
+    echo Check $FILTERED_DIR for filtered files
     exit
 else
     while getopts ":ie:d:h" optname   # ------------------------------------------ Invoke parameters handling
