@@ -25,6 +25,8 @@ Podczas inicjacji każdy z plików konfiguracyjnych został uzupełniony bazową
 * linie rozpoczynające się od znaku „-” są dodane jako słowo odrzucające linię, połączone również alternatywą logiczną (czyli przy zaprzeczeniu jest to suma logiczna)
 * wszystkie inne linie są ignorowane
 
+Słowo kluczowe może być dowolnym wyrażeniem regularnym akceptowanym przez egrep ([man egrep](http://linux.die.net/man/1/egrep)).
+
 ## Włączenie konfiguracji
 Następnie trzeba włączyć konfigurację. W tym celu należy podać komendę enable i nazwę pliku:
 
